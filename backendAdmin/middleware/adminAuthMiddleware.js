@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { Admin } from "../controllers/adminController.js";
+import { Admin } from "../models/index.js";
 
 // @desc    Protect routes - Verify JWT Token
 // @access  Private
@@ -37,5 +37,3 @@ export const superAdminOnly = (req, res, next) => {
     res.status(403).json({ message: "This action requires superadmin privileges" });
   }
 };
-
-export default Admin;

@@ -26,6 +26,10 @@ const User = sequelize.define(
       type: DataTypes.STRING,
       defaultValue: "user",
     },
+    status: {
+      type: DataTypes.STRING,
+      defaultValue: "active",
+    },
     purchasedCourses: {
       type: DataTypes.JSON,
       defaultValue: [],

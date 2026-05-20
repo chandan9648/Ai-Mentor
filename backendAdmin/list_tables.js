@@ -1,19 +1,21 @@
-// backendAdmin/list_tables.js
 import { sequelize } from "./config/db.js";
-import dotenv from "dotenv";
-dotenv.config();
 
-async function list() {
+async function checkUsers() {
   try {
-    await sequelize.authenticate();
-    const [results] = await sequelize.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'");
-    console.log("Tables in public schema:");
-    results.forEach(r => console.log(` - ${r.table_name}`));
-    process.exit(0);
-  } catch (err) {
-    console.error(err);
-    process.exit(1);
+    const [results] = await sequelize.query('SELECT * FROM "Users" LIMIT 5');
+    console.log("Users sample:", results);
+    
+    const [columns] = await sequelize.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'Users'
+    `);
+    console.log("Columns in Users table:", columns);
+  } catch (error) {
+    console.error("Error checking Users table:", error.message);
+  } finally {
+    await sequelize.close();
   }
 }
 
-list();
+checkUsers();

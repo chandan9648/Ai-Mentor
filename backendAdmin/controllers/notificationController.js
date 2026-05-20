@@ -2,11 +2,8 @@ import { AdminNotification, Course, User, Admin } from "../models/index.js";
 
 const ensureNotificationSeed = async () => {
   await AdminNotification.sync();
-  const count = await AdminNotification.count();
-  if (count > 0) {
-    return;
-  }
-
+  if (await AdminNotification.count() > 0) return;
+  
   const [latestCourse, latestUser, latestAdmin] = await Promise.all([
     Course.findOne({ attributes: ["title", "createdAt"], order: [["createdAt", "DESC"]] }),
     User.findOne({ attributes: ["name", "createdAt"], order: [["createdAt", "DESC"]] }),
@@ -14,63 +11,17 @@ const ensureNotificationSeed = async () => {
   ]);
 
   const seedRows = [];
-
-  if (latestUser) {
-    seedRows.push({
-      title: "New user joined",
-      message: `${latestUser.name || "A user"} created a new account.`,
-      type: "user",
-      unread: true,
-      createdAt: latestUser.createdAt,
-      updatedAt: latestUser.createdAt,
-    });
-  }
-
-  if (latestCourse) {
-    seedRows.push({
-      title: "Course update",
-      message: `${latestCourse.title || "A course"} is available in catalog.`,
-      type: "course",
-      unread: true,
-      createdAt: latestCourse.createdAt,
-      updatedAt: latestCourse.createdAt,
-    });
-  }
-
-  if (latestAdmin) {
-    seedRows.push({
-      title: "Admin activity",
-      message: `${latestAdmin.name || "An admin"} has admin access.`,
-      type: "admin",
-      unread: false,
-      createdAt: latestAdmin.createdAt,
-      updatedAt: latestAdmin.createdAt,
-    });
-  }
-
-  if (seedRows.length === 0) {
-    seedRows.push({
-      title: "Welcome",
-      message: "Notification center is now active.",
-      type: "system",
-      unread: false,
-    });
-  }
-
+  if (latestUser) seedRows.push({ title: "New user joined", message: `${latestUser.name || "A user"} created a new account.`, type: "user", unread: true, createdAt: latestUser.createdAt, updatedAt: latestUser.createdAt });
+  if (latestCourse) seedRows.push({ title: "Course update", message: `${latestCourse.title || "A course"} is available in catalog.`, type: "course", unread: true, createdAt: latestCourse.createdAt, updatedAt: latestCourse.createdAt });
+  if (latestAdmin) seedRows.push({ title: "Admin activity", message: `${latestAdmin.name || "An admin"} has admin access.`, type: "admin", unread: false, createdAt: latestAdmin.createdAt, updatedAt: latestAdmin.createdAt });
+  if (seedRows.length === 0) seedRows.push({ title: "Welcome", message: "Notification center is now active.", type: "system", unread: false });
   await AdminNotification.bulkCreate(seedRows);
 };
 
-// @desc    Get admin notifications
-// @route   GET /api/admin/notifications
-// @access  Private
 export const getAdminNotifications = async (req, res) => {
   try {
     await ensureNotificationSeed();
-    const notifications = await AdminNotification.findAll({
-      order: [["createdAt", "DESC"]],
-      limit: 30,
-    });
-
+    const notifications = await AdminNotification.findAll({ order: [["createdAt", "DESC"]], limit: 30 });
     res.status(200).json({ success: true, data: notifications });
   } catch (error) {
     console.error("GET NOTIFICATIONS ERROR:", error.message);
@@ -78,9 +29,6 @@ export const getAdminNotifications = async (req, res) => {
   }
 };
 
-// @desc    Mark all notifications as read
-// @route   PATCH /api/admin/notifications/mark-all-read
-// @access  Private
 export const markAllNotificationsRead = async (req, res) => {
   try {
     await AdminNotification.update({ unread: false }, { where: { unread: true } });
@@ -91,21 +39,13 @@ export const markAllNotificationsRead = async (req, res) => {
   }
 };
 
-// @desc    Mark one notification as read
-// @route   PATCH /api/admin/notifications/:id/read
-// @access  Private
 export const markNotificationRead = async (req, res) => {
   try {
     const { id } = req.params;
     const notification = await AdminNotification.findByPk(id);
-
-    if (!notification) {
-      return res.status(404).json({ success: false, message: "Notification not found" });
-    }
-
+    if (!notification) return res.status(404).json({ success: false, message: "Notification not found" });
     notification.unread = false;
     await notification.save();
-
     res.status(200).json({ success: true, data: notification });
   } catch (error) {
     console.error("MARK READ ERROR:", error.message);
@@ -113,9 +53,6 @@ export const markNotificationRead = async (req, res) => {
   }
 };
 
-// @desc    Clear all notifications
-// @route   DELETE /api/admin/notifications/clear
-// @access  Private
 export const clearAllNotifications = async (req, res) => {
   try {
     await AdminNotification.destroy({ where: {} });
