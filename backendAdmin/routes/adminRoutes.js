@@ -56,7 +56,7 @@ router.get("/users", protectAdmin, getAllUsers);
 router.patch("/users/:id/status", protectAdmin, superAdminOnly, updateUserStatus);
 router.delete("/users/:id", protectAdmin, superAdminOnly, deleteUser);
 router.get("/reports", protectAdmin, getAllReports);
-router.get("/admins", protectAdmin, superAdminOnly, getAllAdmins);
+router.get("/admins", protectAdmin, getAllAdmins);
 
 // Notifications
 router.get("/notifications", protectAdmin, getAdminNotifications);
@@ -65,6 +65,6 @@ router.patch("/notifications/:id/read", protectAdmin, markNotificationRead);
 router.delete("/notifications/clear", protectAdmin, clearAllNotifications);
 
 //coures Report
-router.get("/coures-reports", getAllCouresReports);
+router.get("/coures-reports", protectAdmin, getAllCouresReports);
 
 export default router;
