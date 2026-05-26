@@ -105,20 +105,23 @@ router.post("/generate-video", protect, validate(generateVideoSchema), async (re
 //       lessonTitle,
 //       userPreferences,
 //     });
-
+//
 //     console.log(`📥 Job added to queue: ${job.id}`);
-
+//
 //     res.json({
 //       jobId: job.id,
 //       status: "processing",
 //       message: "Video generation started",
 //     });
+       
+    // Temporary fallback response since videoQueue is disabled
+    return res.status(501).json({ message: "Video generation is temporarily disabled." });
 
-//   } catch (error) {
-//     console.error("AI GENERATE ERROR:", error);
-//     res.status(500).json({ message: "Failed to generate AI video" });
-//   }
-// });
+  } catch (error) {
+    console.error("AI GENERATE ERROR:", error);
+    res.status(500).json({ message: "Failed to generate AI video" });
+  }
+});
 
 // ----------------------------------------------------
 // Proxy Transcript Content from Python
