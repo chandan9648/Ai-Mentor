@@ -9,9 +9,6 @@ import React, {
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { auth } from '../firebase.js';
-import { signOut } from 'firebase/auth';
 import { apiFetch } from '../lib/api';
 const AuthContext = createContext();
 
@@ -99,13 +96,12 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const logout = async () => {
-    try {
   useEffect(() => {
-  if (isAuthenticated) {
-    fetchUserProfile();
-  }
-}, [isAuthenticated, fetchUserProfile]);
+    if (isAuthenticated) {
+      fetchUserProfile();
+    }
+  }, [isAuthenticated, fetchUserProfile]);
+  
 const logout = async () => {
 
         try {
@@ -157,10 +153,4 @@ const logout = async () => {
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
 };

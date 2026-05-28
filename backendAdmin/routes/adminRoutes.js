@@ -24,6 +24,9 @@ import {
   getAllPayments,
   getAllReports,
   getAllDiscussions,
+  hideDiscussion,
+  unhideDiscussion,
+  deleteDiscussion
 } from "../controllers/dataController.js";
 import {
   getAdminNotifications,
@@ -71,5 +74,9 @@ router.get("/coures-reports", protectAdmin, getAllCouresReports);
 router.patch("/coures-reports/:id", protectAdmin, updateReportStatus);
 router.delete("/coures-reports/:id", protectAdmin, deleteReport);
 
+// DISCUSSION MODERATION ROUTES
+router.put("/discussions/:id/hide", protectAdmin, hideDiscussion);
+router.put("/discussions/:id/unhide", protectAdmin, unhideDiscussion);
+router.delete("/discussions/:id", protectAdmin, deleteDiscussion);
 
 export default router;
