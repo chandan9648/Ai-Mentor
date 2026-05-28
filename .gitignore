@@ -61,6 +61,7 @@ coverage/
 
 */.agents
 
+backend/config/serviceAccountKey.json
 # =====================
 # Local Scripts
 # =====================

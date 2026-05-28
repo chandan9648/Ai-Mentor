@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import Report from "../models/Report.js";
 import crypto from "crypto";
 import { createNotification } from "./notificationController.js";
+import AdminNotification from "../models/AdminNotification.js";
 
 // @desc    Get course community stats (list of courses with post counts)
 // @route   GET /api/community/courses
@@ -480,6 +481,13 @@ const reportContent = async (req, res) => {
         },
       });
     }
+    
+    // Also notify the admin dashboard
+    await AdminNotification.create({
+      title: isCommentReport ? "Comment Reported" : "Discussion Post Reported",
+      message: `${reporterName} reported a ${contentLabel}. ${reasonOrDescription}`,
+      type: "report",
+    });
 
     res.status(201).json({ message: "Report submitted successfully", report });
   } catch (error) {

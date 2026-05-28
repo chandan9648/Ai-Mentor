@@ -24,6 +24,7 @@ import preferenceRoutes from "./routes/preferenceRoutes.js";
 import contactUsRoutes from "./routes/contactus.js"; // ✅ fixed import
 import reportRoutes from "./routes/reportRoutes.js";
 import docsRoutes from "./routes/docsRoutes.js";
+import helmet from "helmet";
 
 // ================= MODELS =================
 import "./models/CommunityPost.js";
@@ -44,6 +45,12 @@ const app = express();
 
 // ================= MIDDLEWARE =================
 app.use(express.json());
+
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  })
+);
 
 app.use(
   cors({
@@ -76,7 +83,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/certificate", certificateRoutes);
 app.use("/api/preferences", preferenceRoutes);
 app.use("/api/contactus", contactUsRoutes); // ✅ added route
-app.use("/api/coures-reports", reportRoutes);
+app.use("/api/course-reports", reportRoutes);
 app.use("/api/docs", docsRoutes);
 
 // ================= 404 HANDLER =================

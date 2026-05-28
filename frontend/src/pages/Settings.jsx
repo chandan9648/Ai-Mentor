@@ -12,8 +12,12 @@ import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n/index.js";
 
+// ── Added Firebase Imports for Issue #390 Fix ───────────────────────────
+import { signOut } from "firebase/auth";
+import { auth } from "../firebase"; // Ensure this matches your project path to firebase config
+
 const NAV_KEYS = [
-  { icon: User,     key: "profile",           labelKey: "settings.nav.profile" },
+  { icon: User,     key: "profile",          labelKey: "settings.nav.profile" },
   { icon: Bell,     key: "notifications",      labelKey: "settings.nav.notifications" },
   { icon: Shield,   key: "password_security",  labelKey: "settings.nav.password_security" },
   { icon: Sparkles, key: "preferences",        labelKey: "preferences.nav_title" },
@@ -109,6 +113,7 @@ function MobileSettingsDrawer({ open, onClose, onSelect, t }) {
 /* ───────────────────────────────────────────────
    Mobile full-screen modal (individual setting)
 ─────────────────────────────────────────────── */
+// eslint-disable-next-line no-unused-vars
 function MobileModal({ open, onBack, onClose, title, children }) {
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -174,7 +179,9 @@ export default function Settings() {
   const [deleting, setDeleting] = useState(false);
   const [deletePopup, setDeletePopup] = useState(false);
   const [passwordData, setPasswordData] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  // eslint-disable-next-line no-unused-vars
   const [passwordError, setPasswordError] = useState("");
+  // eslint-disable-next-line no-unused-vars
   const [pwFocused, setPwFocused] = useState(false);
 
   /* handlers */
@@ -182,8 +189,18 @@ export default function Settings() {
     try {
       setDeleting(true);
       const token = localStorage.getItem("token");
+      
+      // 1. Delete account from your backend database database
       await axios.delete("/api/users/delete-account", { headers: { Authorization: `Bearer ${token}` } });
+      
+      // 2. Clear local browser token storage
       localStorage.removeItem("token");
+      
+      // 3. Clear Firebase Client-Side Memory Token Instance ✅
+      if (auth) {
+        await signOut(auth);
+      }
+      
       setshowDeletePopup(false);
       setDeletePopup(true);
     } catch (error) {
@@ -302,58 +319,65 @@ export default function Settings() {
           <h1 className="text-xl sm:text-2xl md:text-[30px] font-bold text-main font-[Inter] mb-2">{t("settings.profile.title")}</h1>
           <p className="text-sm sm:text-[16px] text-muted font-[Inter]">{t("settings.profile.subtitle")}</p>
         </div>
-      <div className="bg-card rounded-2xl sm:rounded-[24px] shadow-[0_4px_6px_0_rgba(0,0,0,0.10),0_10px_15px_0_rgba(0,0,0,0.10)] p-4 sm:p-5 md:p-6">
-        <div className="flex flex-col md:flex-row gap-4 md:gap-6 mb-6">
-          <div className="flex flex-col items-center">
-            <div className="relative mb-4">
-              <img
-                src={avatarFile ? URL.createObjectURL(avatarFile) : user?.avatar_url ? user.avatar_url : `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(`${formData.firstName} ${formData.lastName}`)}`}
-                onError={(e) => {
-                  e.currentTarget.onerror = null;
-                  e.currentTarget.src = `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(`${formData.firstName} ${formData.lastName}`)}`;
-                }}
-                alt="Profile"
-                className="w-24 h-24 rounded-full border-4 border-[rgba(255,135,89,0.65)] shadow-[0_4px_6px_0_rgba(0,0,0,0.10),0_10px_15px_0_rgba(0,0,0,0.10)]"
-              />
-              <label className="absolute bottom-2 right-2 w-10 h-10 bg-[#475569] rounded-full flex items-center justify-center cursor-pointer shadow-[0_4px_6px_0_rgba(0,0,0,0.10),0_10px_15px_0_rgba(0,0,0,0.10)]">
-                <Camera className="w-[14px] h-[14px] text-white" />
-                <input type="file" accept="image/*" hidden onChange={(e) => setAvatarFile(e.target.files[0])} />
-              </label>
-            </div>
-            <h2 className="text-[20px] font-semibold text-main font-[Inter] mb-1">{formData.firstName} {formData.lastName}</h2>
-            <p className="text-[16px] text-muted font-[Inter]">{t("common.premium_member")}</p>
-          </div>
-          <div className="flex-1 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="relative">
-                <label className="absolute -top-2 left-4 bg-card px-2 text-[14px] text-muted font-medium font-[Inter]">{t("settings.profile.first_name")}</label>
-                <input type="text" value={formData.firstName} onChange={(e) => handleInputChange("firstName", e.target.value)} className="w-full h-[42px] px-4 rounded-xl border border-border text-[16px] font-[Inter] focus:ring-2 focus:ring-primary focus:border-primary bg-input text-main" />
+        <div className="bg-card rounded-2xl sm:rounded-[24px] shadow-[0_4px_6px_0_rgba(0,0,0,0.10),0_10px_15px_0_rgba(0,0,0,0.10)] p-5 sm:p-6 md:p-8">
+          <div className="flex flex-col md:flex-row gap-6 md:gap-10 mb-6">
+
+            {/* ── Avatar column ── */}
+            <div className="flex flex-col items-center md:items-center md:justify-start pt-1 flex-shrink-0">
+              {/* Avatar + camera button */}
+              <div className="relative mb-4">
+                <img
+                  src={avatarFile ? URL.createObjectURL(avatarFile) : user?.avatar_url ? user.avatar_url : `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(`${formData.firstName} ${formData.lastName}`)}`}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(`${formData.firstName} ${formData.lastName}`)}`;
+                  }}
+                  alt="Profile"
+                  className="w-24 h-24 rounded-full border-4 border-[rgba(255,135,89,0.65)] shadow-[0_4px_6px_0_rgba(0,0,0,0.10),0_10px_15px_0_rgba(0,0,0,0.10)]"
+                />
+                {/* Camera icon — sits outside the avatar at bottom-right */}
+                <label className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#475569] hover:bg-[#334155] rounded-full flex items-center justify-center cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.25)] border-2 border-card transition-colors">
+                  <Camera className="w-[13px] h-[13px] text-white" />
+                  <input type="file" accept="image/*" hidden onChange={(e) => setAvatarFile(e.target.files[0])} />
+                </label>
               </div>
-              <div className="relative">
-                <label className="absolute -top-2 left-4 bg-card px-2 text-[14px] text-muted font-medium font-[Inter]">{t("settings.profile.last_name")}</label>
-                <input type="text" value={formData.lastName} onChange={(e) => handleInputChange("lastName", e.target.value)} className="w-full h-[42px] px-4 rounded-xl border border-border text-[16px] font-[Inter] focus:ring-2 focus:ring-primary focus:border-primary bg-input text-main" />
+              <h2 className="text-[18px] font-semibold text-main font-[Inter] mb-0.5 text-center">{formData.firstName} {formData.lastName}</h2>
+              <p className="text-[14px] text-muted font-[Inter] text-center">{t("common.premium_member")}</p>
+            </div>
+
+            {/* ── Form column ── */}
+            <div className="flex-1 space-y-5 min-w-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="relative pt-2">
+                  <label className="absolute top-0 left-4 bg-card px-2 text-[13px] text-muted font-medium font-[Inter]">{t("settings.profile.first_name")}</label>
+                  <input type="text" value={formData.firstName} onChange={(e) => handleInputChange("firstName", e.target.value)} className="w-full h-[46px] px-4 rounded-xl border border-border text-[15px] font-[Inter] focus:ring-2 focus:ring-primary focus:border-primary bg-input text-main transition-colors" />
+                </div>
+                <div className="relative pt-2">
+                  <label className="absolute top-0 left-4 bg-card px-2 text-[13px] text-muted font-medium font-[Inter]">{t("settings.profile.last_name")}</label>
+                  <input type="text" value={formData.lastName} onChange={(e) => handleInputChange("lastName", e.target.value)} className="w-full h-[46px] px-4 rounded-xl border border-border text-[15px] font-[Inter] focus:ring-2 focus:ring-primary focus:border-primary bg-input text-main transition-colors" />
+                </div>
+              </div>
+              <div className="relative pt-2">
+                <label className="absolute top-0 left-4 bg-card px-2 text-[13px] text-muted font-medium font-[Inter]">{t("settings.profile.email")}</label>
+                <input type="email" value={formData.email} onChange={(e) => handleInputChange("email", e.target.value)} className="w-full h-[46px] px-4 rounded-xl border border-border text-[15px] font-[Inter] focus:ring-2 focus:ring-primary focus:border-primary bg-input text-main transition-colors" />
+              </div>
+              <div className="relative pt-2">
+                <label className="absolute top-0 left-4 bg-card px-2 text-[13px] text-muted font-medium font-[Inter]">{t("settings.profile.bio")}</label>
+                <textarea value={formData.bio} onChange={(e) => handleInputChange("bio", e.target.value)} className="w-full min-h-[88px] px-4 py-3 rounded-xl border border-border text-[15px] font-[Inter] resize-none focus:ring-2 focus:ring-primary focus:border-primary bg-input text-main transition-colors" />
               </div>
             </div>
-            <div className="relative">
-              <label className="absolute -top-2 left-4 bg-card px-2 text-[14px] text-muted font-medium font-[Inter]">{t("settings.profile.email")}</label>
-              <input type="email" value={formData.email} onChange={(e) => handleInputChange("email", e.target.value)} className="w-full h-[42px] px-4 rounded-xl border border-border text-[16px] font-[Inter] focus:ring-2 focus:ring-primary focus:border-primary bg-input text-main" />
-            </div>
-            <div className="relative">
-              <label className="absolute -top-2 left-4 bg-card px-2 text-[14px] text-muted font-medium font-[Inter]">{t("settings.profile.bio")}</label>
-              <textarea value={formData.bio} onChange={(e) => handleInputChange("bio", e.target.value)} className="w-full min-h-[80px] px-4 py-3 rounded-xl border border-border text-[16px] font-[Inter] resize-none focus:ring-2 focus:ring-primary focus:border-primary bg-input text-main" />
-            </div>
+
           </div>
-        </div>
-        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t border-border">
-          <button type="button" className="h-[42px] px-6 rounded-xl border border-border bg-card text-main text-[16px] font-medium font-[Inter] hover:bg-canvas-alt">{t("common.cancel")}</button>
-          <button onClick={handleSaveChanges} disabled={loading} className="h-[42px] px-6 rounded-xl bg-[#00BEA5] text-white text-[16px] font-medium font-[Inter] hover:opacity-90 disabled:opacity-50">
-            {loading ? t("common.saving") : t("common.save_changes")}
-          </button>
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-5 border-t border-border">
+            <button type="button" className="h-[42px] px-6 rounded-xl border border-border bg-card text-main text-[16px] font-medium font-[Inter] hover:bg-canvas-alt transition-colors">{t("common.cancel")}</button>
+            <button onClick={handleSaveChanges} disabled={loading} className="h-[42px] px-6 rounded-xl bg-[#00BEA5] text-white text-[16px] font-medium font-[Inter] hover:opacity-90 disabled:opacity-50 transition-opacity">
+              {loading ? t("common.saving") : t("common.save_changes")}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   const NotificationsPanel = () => (
     <div className="w-full">
@@ -597,7 +621,7 @@ export default function Settings() {
         <h1 className="text-xl sm:text-2xl md:text-[30px] font-bold text-main font-[Inter] mb-2">{t("settings.appearance.title")}</h1>
         <p className="text-sm sm:text-[16px] text-muted font-[Inter]">{t("settings.appearance.subtitle")}</p>
       </div>
-      <div className="bg-card rounded-2xl sm:rounded-[24px] shadow-[0_4px_6px_0_rgba(0,0,0,0.10),0_10px_15px_0_rgba(0,0,0,0.10)] p-4 sm:p-6 md:p-8">
+      <div className="bg-card rounded-2xl sm:rounded-[24px] shadow-[0_4px_6_0_rgba(0,0,0,0.10),0_10px_15_0_rgba(0,0,0,0.10)] p-4 sm:p-6 md:p-8">
         <div className="space-y-6">
           <div>
             <h3 className="text-[16px] font-semibold text-main font-[Inter] mb-3">{t("settings.appearance.theme")}</h3>
