@@ -762,6 +762,7 @@ const CoursesPage = () => {
                                                 src={course.image}
                                                 className="w-full h-full object-cover"
                                                 alt={course.title}
+                                                loading="lazy"
                                             />
                                         </div>
 
@@ -856,6 +857,7 @@ const CoursesPage = () => {
                                                 src={course.image}
                                                 className="w-full h-full object-cover"
                                                 alt={course.title}
+                                                loading="lazy"
                                             />
                                             <div className="absolute bottom-3 right-3 bg-white text-black px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 shadow">
                                                 <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
@@ -930,6 +932,7 @@ const CoursesPage = () => {
                             src={selectedCourse.image}
                             alt={selectedCourse.title}
                             className="w-full h-40 object-cover rounded-xl mb-4"
+                            loading="lazy"
                         />
                         <h2 className="text-xl font-bold">{selectedCourse.title}</h2>
                         <p className="text-sm text-slate-500 mt-1">
