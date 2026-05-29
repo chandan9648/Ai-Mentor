@@ -49,6 +49,11 @@ const CoursesPage = () => {
     const [showEnrollPopup, setShowEnrollPopup] = useState(false);
     const [selectedCourse, setSelectedCourse] = useState(null);
 
+    const courseIdMatches = (entry, targetId) => {
+        if (!entry) return false;
+        return String(entry?.id ?? entry?.courseId ?? entry?.course?.id) === String(targetId);
+    };
+
     const filterRef = useRef(null);
 
     useEffect(() => {
@@ -97,6 +102,31 @@ const CoursesPage = () => {
         };
 
         fetchCourses();
+    }, []);
+
+    // Listen for external refresh requests (e.g., after enrollment elsewhere)
+    useEffect(() => {
+        const refreshCourses = async () => {
+            try {
+                const token = localStorage.getItem("token");
+                const [exploreRes, myRes] = await Promise.all([
+                    fetch(`${API_BASE_URL}/api/courses`),
+                    fetch(`${API_BASE_URL}/api/courses/my-courses`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                    }),
+                ]);
+                const exploreData = await exploreRes.json();
+                const myData = myRes.ok ? await myRes.json() : [];
+                console.log('refreshCourses: updated myCourses length', myData?.length);
+                setExploreCourses(exploreData);
+                setMyCourses(myData);
+            } catch (err) {
+                console.error('refreshCourses error:', err);
+            }
+        };
+
+        window.addEventListener('refreshCourses', refreshCourses);
+        return () => window.removeEventListener('refreshCourses', refreshCourses);
     }, []);
 
     const location = useLocation();
@@ -351,8 +381,27 @@ const CoursesPage = () => {
 
     const filteredExploreCourses = exploreCourses
         .filter((course) =>
-            !myCourses.some((c) => String(c.id) === String(course.id))
+            !myCourses.some((c) => courseIdMatches(c, course.id))
         )
+        .filter((course) => {
+            if (searchQuery.trim() !== "") {
+                return course.title.toLowerCase().includes(searchQuery.toLowerCase());
+            }
+
+            const cat = course.category === "Databases" ? "Database" : course.category;
+            const matchesCategory = filters.category.length === 0 || filters.category.includes(cat);
+            const matchesLevel = filters.level.length === 0 || filters.level.includes(course.level);
+
+            const isFree = course.priceValue === 0 || course.price === "₹0" || course.price === "Free" || !course.price;
+            const type = isFree ? "Free" : "Paid";
+            const matchesPrice = filters.price.length === 0 || filters.price.includes(type);
+
+            return matchesCategory && matchesLevel && matchesPrice;
+        });
+
+    // Same filters as filteredExploreCourses but WITHOUT the enrollment exclusion,
+    // so enrolled cards stay visible with the "Enrolled" button state.
+    const allFilteredExploreCourses = exploreCourses
         .filter((course) => {
             if (searchQuery.trim() !== "") {
                 return course.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -689,7 +738,7 @@ const CoursesPage = () => {
 
                             {filteredMyCourses.map((course) => {
                                 const purchasedEntry = user?.purchasedCourses?.find(
-                                    (c) => Number(c.courseId) === Number(course.id)
+                                    (c) => courseIdMatches(c, course.id)
                                 );
                                 const progress = purchasedEntry?.progress;
                                 const hasStarted =
@@ -778,11 +827,15 @@ const CoursesPage = () => {
 
 
 
-                                {filteredExploreCourses.length === 0 && (
+                                {allFilteredExploreCourses.length === 0 && (
                                     <p className="text-slate-500">{t("courses.no_courses")}</p>
                                 )}
 
-                                {filteredExploreCourses.map((course) => (
+                                {allFilteredExploreCourses.map((course) => {
+                                                            const isEnrolled =
+                                                                myCourses.some((c) => courseIdMatches(c, course.id)) ||
+                                                                user?.purchasedCourses?.some((c) => courseIdMatches(c, course.id));
+                                    return (
                                     <div
                                         key={course.id}
                                         className="
@@ -832,17 +885,28 @@ const CoursesPage = () => {
                                                 </span>
 
                                                 <button
-                                                    onClick={() => navigate(`/course-preview/${course.id}`)}
-                                                    className="px-4 py-2 rounded-lg bg-[#2DD4BF] text-white text-xs font-semibold hover:bg-teal-500 transition-colors"
+                                                    onClick={() => {
+                                                        if (!isEnrolled) {
+                                                            setSelectedCourse(course);
+                                                            setShowEnrollPopup(true);
+                                                        }
+                                                    }}
+                                                    disabled={isEnrolled}
+                                                    className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                                                        isEnrolled
+                                                            ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 cursor-default"
+                                                            : "bg-[#2DD4BF] text-white hover:bg-teal-500"
+                                                    }`}
                                                 >
-                                                    {t("common.enroll")}
+                                                    {isEnrolled ? t("courses.enrolled_short") : t("common.enroll")}
                                                 </button>
                                             </div>
 
                                         </div>
 
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
