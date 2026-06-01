@@ -3,23 +3,34 @@ import User from "../models/User.js";
 import Report from "../models/Report.js";
 import crypto from "crypto";
 import { createNotification } from "./notificationController.js";
+import AdminNotification from "../models/AdminNotification.js";
 
 // @desc    Get course community stats (list of courses with post counts)
 // @route   GET /api/community/courses
 // @access  Private
-const getCourseCommunityStats = async (_req, res) => {
+const getCourseCommunityStats = async (req, res) => {
   try {
     const posts = await CommunityPost.findAll({
       where: { type: "course" },
       attributes: ["courseId", "courseName"],
     });
 
+    // Get user's enrolled courses
+    const user = await User.findByPk(req.user.id);
+    const purchasedCourses = user?.purchasedCourses || [];
+    const enrolledCourseIds = purchasedCourses.map(c => c.id || c.courseId);
+
     // Aggregate by courseId
     const courseMap = {};
     posts.forEach((p) => {
       const key = p.courseId;
       if (!courseMap[key]) {
-        courseMap[key] = { courseId: p.courseId, courseName: p.courseName, postCount: 0 };
+        courseMap[key] = {
+          courseId: p.courseId,
+          courseName: p.courseName,
+          postCount: 0,
+          isEnrolled: enrolledCourseIds.includes(p.courseId),
+        };
       }
       courseMap[key].postCount++;
     });
@@ -39,8 +50,20 @@ const getCourseDiscussions = async (req, res) => {
     const { courseId } = req.params;
     const { sort } = req.query;
 
+    // Check if user is enrolled in the course
+    const user = await User.findByPk(req.user.id);
+    const purchasedCourses = user?.purchasedCourses || [];
+    const isEnrolled = purchasedCourses.some(c => c.id === parseInt(courseId) || c.courseId === parseInt(courseId));
+
+    if (!isEnrolled) {
+      return res.status(403).json({
+        message: "You must be enrolled in this course to view its community discussions",
+        requiresEnrollment: true
+      });
+    }
+
     const posts = await CommunityPost.findAll({
-      where: { type: "course", courseId: parseInt(courseId) },
+      where: { type: "course", courseId: parseInt(courseId), hiddenAt: null },
       include: [
         { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
@@ -68,7 +91,7 @@ const getGlobalDiscussions = async (req, res) => {
   try {
     const { category, sort } = req.query;
 
-    const where = { type: "global" };
+    const where = { type: "global", hiddenAt: null };
     if (category && category !== "All Categories") {
       where.category = category;
     }
@@ -104,6 +127,17 @@ const createCommunityPost = async (req, res) => {
     }
 
     const { type, courseId, courseName, category, content } = req.body;
+
+    // Check enrollment for course posts
+    if (type === "course") {
+      const user = await User.findByPk(req.user.id);
+      const purchasedCourses = user?.purchasedCourses || [];
+      const isEnrolled = purchasedCourses.some(c => c.id === courseId || c.courseId === courseId);
+
+      if (!isEnrolled) {
+        return res.status(403).json({ message: "You must be enrolled in this course to create posts in its community" });
+      }
+    }
 
     const post = await CommunityPost.create({
       userId: req.user.id,
@@ -288,6 +322,17 @@ const replyCommunityPost = async (req, res) => {
     const post = await CommunityPost.findByPk(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found" });
 
+    // Check enrollment for course posts
+    if (post.type === "course") {
+      const user = await User.findByPk(req.user.id);
+      const purchasedCourses = user?.purchasedCourses || [];
+      const isEnrolled = purchasedCourses.some(c => c.id === post.courseId || c.courseId === post.courseId);
+
+      if (!isEnrolled) {
+        return res.status(403).json({ message: "You must be enrolled in this course to comment in its discussion" });
+      }
+    }
+
     const newReply = {
       id: crypto.randomUUID(),
       userId: req.user.id,
@@ -337,7 +382,7 @@ const getAllCoursePosts = async (req, res) => {
     const { sort } = req.query;
 
     const posts = await CommunityPost.findAll({
-      where: { type: "course" },
+      where: { type: "course", hiddenAt: null },
       include: [
         { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
@@ -436,6 +481,13 @@ const reportContent = async (req, res) => {
         },
       });
     }
+    
+    // Also notify the admin dashboard
+    await AdminNotification.create({
+      title: isCommentReport ? "Comment Reported" : "Discussion Post Reported",
+      message: `${reporterName} reported a ${contentLabel}. ${reasonOrDescription}`,
+      type: "report",
+    });
 
     res.status(201).json({ message: "Report submitted successfully", report });
   } catch (error) {

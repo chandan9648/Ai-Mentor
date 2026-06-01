@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   MoreVertical,
 } from "lucide-react";
+import FloatingAssistant from "../components/common/FloatingAssistant";
 
 //helpers
 const getRelativeTime = (dateStr) => {
@@ -111,6 +112,7 @@ const DiscussionsPage = () => {
   const [panelReplyingTo, setPanelReplyingTo] = useState(null);
   const [panelReplyInputText, setPanelReplyInputText] = useState("");
   const [allCourses, setAllCourses] = useState([]);
+  const [panelRequiresEnrollment, setPanelRequiresEnrollment] = useState(false);
 
   // Global community state
   const [globalPosts, setGlobalPosts] = useState([]);
@@ -150,6 +152,45 @@ const DiscussionsPage = () => {
 
   // Dropdown state
   const [openDropdown, setOpenDropdown] = useState(null); // stores postId or replyId of open dropdown
+
+  // Custom category selector state
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [filterPickerOpen, setFilterPickerOpen] = useState(false);
+  const [categoryPickerPos, setCategoryPickerPos] = useState("bottom");
+  const [filterPickerPos, setFilterPickerPos] = useState("bottom");
+  const categoryPickerRef = useRef(null);
+  const filterPickerRef = useRef(null);
+
+  // Measure available space and decide open direction
+  // Panel max height ≈ 210px. Only open upward when space below is tight
+  // AND there is more room above than below.
+  const PANEL_HEIGHT = 220;
+
+  const openCategoryPicker = () => {
+    setFilterPickerOpen(false);
+    if (categoryPickerRef.current) {
+      const rect = categoryPickerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setCategoryPickerPos(
+        spaceBelow < PANEL_HEIGHT && spaceAbove > spaceBelow ? "top" : "bottom"
+      );
+    }
+    setCategoryPickerOpen((o) => !o);
+  };
+
+  const openFilterPicker = () => {
+    setCategoryPickerOpen(false);
+    if (filterPickerRef.current) {
+      const rect = filterPickerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setFilterPickerPos(
+        spaceBelow < PANEL_HEIGHT && spaceAbove > spaceBelow ? "top" : "bottom"
+      );
+    }
+    setFilterPickerOpen((o) => !o);
+  };
 
   const isAdmin = user?.role === "admin";
 
@@ -247,18 +288,52 @@ const DiscussionsPage = () => {
     [token]
   );
 
+const latestPostsByCourse = Object.values(
+  coursePosts
+    .filter((post) => isAdmin || !post.hiddenAt)
+    .reduce((acc, post) => {
+      if (!post.courseId) return acc;
+
+      // First occurrence = latest (because order based on createdAt attribute)
+      if (!acc[post.courseId]) {
+        acc[post.courseId] = post;
+      }
+
+      return acc;
+    }, {})
+);
+  
   // Course panel - posts for a specific course
   const fetchPanelPosts = useCallback(
     async (courseId, sort) => {
       setPanelLoading(true);
+      setPanelRequiresEnrollment(false);
       try {
         const q = sort === "Popular" ? "?sort=popular" : "";
         const res = await fetch(`/api/community/course/${courseId}${q}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+
+        if (res.status === 403) {
+          try {
+            const data = await res.json();
+            if (data.requiresEnrollment) {
+              setPanelRequiresEnrollment(true);
+              setPanelPosts([]);
+              return;
+            }
+          } catch {
+            // If JSON parsing fails, still show enrollment message for 403
+            setPanelRequiresEnrollment(true);
+            setPanelPosts([]);
+            return;
+          }
+        }
+
         if (!res.ok) throw new Error();
         setPanelPosts(await res.json());
-      } catch {
+      } catch (error) {
+        console.error("Error fetching panel posts:", error);
         setPanelPosts([]);
       } finally {
         setPanelLoading(false);
@@ -704,6 +779,18 @@ const DiscussionsPage = () => {
     };
   }, [openDropdown]);
 
+  // Close category pickers when clicking outside
+  useEffect(() => {
+    const handleOutside = (e) => {
+      if (categoryPickerRef.current && !categoryPickerRef.current.contains(e.target))
+        setCategoryPickerOpen(false);
+      if (filterPickerRef.current && !filterPickerRef.current.contains(e.target))
+        setFilterPickerOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, []);
+
   // Handlers for like, dislike, and reply actions that update the appropriate post list on success
   const handleLike = async (postId, source) => {
     try {
@@ -783,7 +870,7 @@ const DiscussionsPage = () => {
 
   return (
     <>
-        <div className="relative overflow-hidden bg-linear-to-br from-teal-700 via-teal-600 to-teal-800 pt-16 pb-12 px-4 sm:px-8">
+        <div className="relative overflow-hidden bg-linear-to-br from-teal-700 via-teal-600 to-teal-800 pt-14 sm:pt-16 pb-10 sm:pb-12 px-3 sm:px-6 md:px-8">
           {/* grid pattern overlay */}
           <div
             className="absolute inset-0 opacity-10"
@@ -794,7 +881,7 @@ const DiscussionsPage = () => {
             }}
           />
           <div className="relative z-10 max-w-4xl mx-auto text-center space-y-4">
-            <h1 className="text-3xl sm:text-5xl font-extrabold text-white">
+            <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-white leading-tight">
               {activeView === "courseCommunity" ? (
                 <>
                   {t("discussions.course_communities").split(" ")[0]}{" "}
@@ -811,14 +898,14 @@ const DiscussionsPage = () => {
                 </span>
               )}
             </h1>
-            <p className="text-teal-100 text-sm sm:text-base max-w-xl mx-auto">
+            <p className="text-teal-100 text-xs sm:text-sm md:text-base max-w-md sm:max-w-xl mx-auto">
               {t("discussions.global_subtitle")}
             </p>
             {/* Tabs */}
-            <div className="flex justify-center gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-2 sm:gap-3 pt-2 px-2 sm:px-4">
               <button
                 onClick={() => setActiveView("courseCommunity")}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm transition-all ${
+                className={`flex items-center gap-2 px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 rounded-full font-semibold text-xs sm:text-sm transition-all ${
                   activeView === "courseCommunity"
                     ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
                     : "bg-black/30 text-white hover:bg-black/40"
@@ -829,7 +916,7 @@ const DiscussionsPage = () => {
               </button>
               <button
                 onClick={() => setActiveView("global")}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm transition-all ${
+                className={`flex items-center gap-2 px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 rounded-full font-semibold text-xs sm:text-sm transition-all ${
                   activeView === "global"
                     ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
                     : "bg-black/30 text-white hover:bg-black/40"
@@ -844,9 +931,9 @@ const DiscussionsPage = () => {
 
         <div className="flex-1 flex relative">
           {activeView === "courseCommunity" && (
-            <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
+           <main className="flex-1 p-3 sm:p-5 md:p-6 overflow-y-auto">
               <div
-                className={`max-w-5xl mx-auto ${
+                className={`max-w-full lg:max-w-5xl mx-auto px-1 sm:px-2 ${
                   selectedCourse ? "xl:mr-105" : ""
                 }`}
               >
@@ -912,9 +999,8 @@ const DiscussionsPage = () => {
                   </div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {coursePosts
-                        .filter((post) => isAdmin || !post.hiddenAt)
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                      {latestPostsByCourse
                         .map((post) => (
                         <div
                           key={post.id}
@@ -924,7 +1010,7 @@ const DiscussionsPage = () => {
                               courseName: courseNameForPost(post),
                             })
                           }
-                          className={`bg-card border border-border rounded-xl p-5 shadow-sm hover:border-indigo-500/50 cursor-pointer transition-colors ${
+                          className={`bg-card border border-border rounded-xl p-3 sm:p-4 md:p-5 shadow-sm hover:border-indigo-500/50 cursor-pointer transition-colors ${
                             post.hiddenAt ? "opacity-60" : ""
                           }`}
                         >
@@ -1005,10 +1091,10 @@ const DiscussionsPage = () => {
               {selectedCourse && (
                 <div
                   ref={panelRef}
-                  className="fixed top-18 right-0 h-[calc(100%-72px)] w-full sm:w-100 bg-card border-l border-border shadow-2xl z-50 flex flex-col"
+                   className="fixed top-16 sm:top-18 right-0 h-[calc(100%-64px)] sm:h-[calc(100%-72px)] w-full sm:w-96 md:w-[420px] lg:w-[480px] bg-card border-l border-border shadow-2xl z-50 flex flex-col"
                 >
                   {/* panel header */}
-                  <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
+                  <div className="p-3 sm:p-4 border-b border-border flex items-center justify-between shrink-0">
                     <div>
                       <div className="flex items-center gap-2">
                         <MessageCircle className="w-5 h-5 text-indigo-500" />
@@ -1063,7 +1149,28 @@ const DiscussionsPage = () => {
 
                   {/* panel messages */}
                   <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {panelLoading ? (
+                    {panelRequiresEnrollment ? (
+                      <div className="flex flex-col items-center justify-center h-full py-12">
+                        <div className="text-center space-y-4">
+                          <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-500/20 rounded-full">
+                            <BookOpen className="w-8 h-8 text-orange-500" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-main mb-2">Enroll to Access Community</h3>
+                            <p className="text-sm text-muted mb-4">
+                              You must be enrolled in <span className="font-medium">{selectedCourse.courseName}</span> to view and participate in discussions.
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => navigate(`/courses`, { state: { activeTab: "explore" } })}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors font-medium"
+                          >
+                            Explore Courses
+                            <ArrowRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : panelLoading ? (
                       <div className="text-center py-8">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-3"></div>
                         <p className="text-muted text-sm">{t("common.loading")}</p>
@@ -1152,7 +1259,7 @@ const DiscussionsPage = () => {
                                   </button>
                                   {/* Dropdown Menu */}
                                   {openDropdown === `post-${post.id}` && (
-                                    <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-10 min-w-30">
+                                    <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-10 min-w-[120px] sm:min-w-[140px]">
                                       {post.userId === user?.id ? (
                                         <>
                                           {/* Edit and Delete options for post owner */}
@@ -1228,7 +1335,7 @@ const DiscussionsPage = () => {
                               ) : (
                                 <p className="text-sm text-muted mt-1">{post.content}</p>
                               )}
-                              <div className="flex items-center gap-4 mt-2 text-xs text-muted">
+                              <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2 text-xs text-muted">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -1491,7 +1598,7 @@ const DiscussionsPage = () => {
                   </div>
 
                   {/* panel input */}
-                  <div className="p-3 border-t border-border shrink-0">
+                  <div className="p-2 sm:p-3 border-t border-border shrink-0">
                     <div className="flex items-center gap-2">
                       <Smile className="w-5 h-5 text-muted shrink-0" />
                       <input
@@ -1508,7 +1615,7 @@ const DiscussionsPage = () => {
                             handlePanelPost(panelReplyText);
                           }
                         }}
-                        className="flex-1 px-3 py-2 bg-input border border-border rounded-lg text-sm text-main placeholder-muted focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 bg-input border border-border rounded-lg text-xs sm:text-sm text-main placeholder-muted focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                       <button
                         onClick={() => handlePanelPost(panelReplyText)}
@@ -1524,12 +1631,13 @@ const DiscussionsPage = () => {
                   </div>
                 </div>
               )}
+              <FloatingAssistant/>
             </main>
           )}
 
           {activeView === "global" && (
             <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
-              <div className="max-w-4xl mx-auto space-y-6">
+              <div className="max-w-full sm:max-w-3xl md:max-w-4xl mx-auto space-y-4 sm:space-y-6 px-2">
                 {/* Welcome Banner */}
                 {showWelcome && (
                   <div className="relative bg-linear-to-r from-red-900/30 to-orange-900/30 border border-orange-500/30 rounded-xl p-5">
@@ -1611,48 +1719,64 @@ const DiscussionsPage = () => {
                       }}
                       placeholder={t("discussions.post_placeholder")}
                       rows={4}
-                      className="flex-1 px-4 py-3 bg-input border border-border rounded-lg text-sm text-main placeholder-muted focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+                     className="flex-1 px-3 sm:px-4 py-2 sm:py-3 bg-input border border-border rounded-lg text-xs sm:text-sm text-main placeholder-muted focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
                     />
                   </div>
                   <div className="flex items-center justify-between mt-3 flex-wrap gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <select
-                          value={globalCategory}
-                          onChange={(e) => setGlobalCategory(e.target.value)}
-                          className="
-    appearance-none
-    pl-4 pr-10 py-2
-    bg-[#ff6d34]
-    hover:bg-[#e65f2c]
-    text-white
-    font-semibold
-    rounded-lg
-    shadow-md
-    border border-[#ff6d34]
-    focus:outline-none
-    focus:ring-2
-    focus:ring-[#00bea3]
-    cursor-pointer
-    transition
-    duration-200
-  "
+                      {/* ── Category picker (post composer) ── */}
+                      <div className="relative" ref={categoryPickerRef}>
+                        {/* Trigger button */}
+                        <button
+                          type="button"
+                          onClick={() => openCategoryPicker()}
+                          className={`flex items-center gap-2 pl-4 pr-3 py-2.5 rounded-xl border text-sm font-semibold transition-all duration-200 min-w-[160px] justify-between
+                            ${globalCategory
+                              ? "bg-teal-500/10 border-teal-500/40 text-teal-600 dark:text-teal-400 hover:bg-teal-500/20"
+                              : "bg-input border-border text-muted hover:border-primary hover:text-main"
+                            }`}
                         >
-                          <option value="" className="bg-white text-[#2D3436]">
-                            Select Category *
-                          </option>
+                          <span className="truncate">{globalCategory || "Select Category *"}</span>
+                          <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${categoryPickerOpen ? "rotate-180" : ""}`} />
+                        </button>
 
-                          {GLOBAL_CATEGORIES.map((c) => (
-                            <option
-                              key={c}
-                              value={c}
-                              className="bg-white text-[#2D3436]"
-                            >
-                              {c}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="w-4 h-4 text-white/80 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        {/* Floating pill panel */}
+                        {categoryPickerOpen && (
+                          <div className={`absolute left-0 z-50 w-64 animate-in fade-in zoom-in-95 duration-200 ${
+                            categoryPickerPos === "top"
+                              ? "bottom-full mb-2 slide-in-from-bottom-2"
+                              : "top-full mt-2 slide-in-from-top-2"
+                          }`}>
+                            <div className="bg-card/95 dark:bg-slate-900/95 backdrop-blur-xl border border-border dark:border-teal-500/20 rounded-2xl shadow-[0_20px_40px_-8px_rgba(0,0,0,0.3)] dark:shadow-[0_20px_40px_-8px_rgba(13,148,136,0.2)] p-4">
+                              <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-3">Select Category</p>
+                              <div className="flex flex-wrap gap-2">
+                                {GLOBAL_CATEGORIES.map((c) => (
+                                  <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => { setGlobalCategory(c); setCategoryPickerOpen(false); }}
+                                    className={`px-3.5 py-1.5 text-xs rounded-xl font-bold transition-all duration-200 ${
+                                      globalCategory === c
+                                        ? "bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-md shadow-teal-500/25 scale-[1.03]"
+                                        : "bg-canvas-alt dark:bg-teal-900/30 text-main dark:text-teal-100 hover:bg-teal-500/15 border border-border dark:border-teal-500/30 hover:border-teal-500/50"
+                                    }`}
+                                  >
+                                    {c}
+                                  </button>
+                                ))}
+                              </div>
+                              {globalCategory && (
+                                <button
+                                  type="button"
+                                  onClick={() => { setGlobalCategory(""); setCategoryPickerOpen(false); }}
+                                  className="mt-3 w-full text-[10px] font-black uppercase tracking-wider text-red-400 hover:text-red-300 transition-colors bg-red-400/10 hover:bg-red-400/20 px-3 py-1.5 rounded-lg"
+                                >
+                                  Clear
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <span
                         className={`text-sm ${
@@ -1687,22 +1811,66 @@ const DiscussionsPage = () => {
                     </h2>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="relative">
-                      <select
-                        value={globalCategoryFilter}
-                        onChange={(e) =>
-                          setGlobalCategoryFilter(e.target.value)
-                        }
-                        className="appearance-none pl-3 pr-8 py-1.5 bg-card border border-border rounded-lg text-sm text-muted focus:outline-none cursor-pointer"
+                    {/* ── Category filter picker ── */}
+                    <div className="relative" ref={filterPickerRef}>
+                      {/* Trigger button */}
+                      <button
+                        type="button"
+                        onClick={() => openFilterPicker()}
+                        className={`flex items-center gap-2 pl-3 pr-2.5 py-1.5 rounded-xl border text-sm font-semibold transition-all duration-200
+                          ${globalCategoryFilter !== "All Categories"
+                            ? "bg-teal-500/10 border-teal-500/40 text-teal-600 dark:text-teal-400 hover:bg-teal-500/20"
+                            : "bg-input border-border text-muted hover:border-primary hover:text-main"
+                          }`}
                       >
-                        <option>{t("discussions.all_categories")}</option>
-                        {GLOBAL_CATEGORIES.map((c) => (
-                          <option key={c} value={c}>
-                            {getCategoryLabel(c)}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="w-4 h-4 text-muted absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <span className="max-w-[120px] truncate text-xs">
+                          {globalCategoryFilter === "All Categories"
+                            ? t("discussions.all_categories")
+                            : getCategoryLabel(globalCategoryFilter)}
+                        </span>
+                        <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 ${filterPickerOpen ? "rotate-180" : ""}`} />
+                      </button>
+
+                      {/* Floating pill panel */}
+                      {filterPickerOpen && (
+                        <div className={`absolute right-0 z-50 w-56 animate-in fade-in zoom-in-95 duration-200 ${
+                          filterPickerPos === "top"
+                            ? "bottom-full mb-2 slide-in-from-bottom-2"
+                            : "top-full mt-2 slide-in-from-top-2"
+                        }`}>
+                          <div className="bg-card/95 dark:bg-slate-900/95 backdrop-blur-xl border border-border dark:border-teal-500/20 rounded-2xl shadow-[0_20px_40px_-8px_rgba(0,0,0,0.3)] dark:shadow-[0_20px_40px_-8px_rgba(13,148,136,0.2)] p-4">
+                            <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-3">Filter by Category</p>
+                            <div className="flex flex-wrap gap-2">
+                              {/* All option */}
+                              <button
+                                type="button"
+                                onClick={() => { setGlobalCategoryFilter("All Categories"); setFilterPickerOpen(false); }}
+                                className={`px-3.5 py-1.5 text-xs rounded-xl font-bold transition-all duration-200 ${
+                                  globalCategoryFilter === "All Categories"
+                                    ? "bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-md shadow-teal-500/25 scale-[1.03]"
+                                    : "bg-canvas-alt dark:bg-teal-900/30 text-main dark:text-teal-100 hover:bg-teal-500/15 border border-border dark:border-teal-500/30 hover:border-teal-500/50"
+                                }`}
+                              >
+                                {t("discussions.all_categories")}
+                              </button>
+                              {GLOBAL_CATEGORIES.map((c) => (
+                                <button
+                                  key={c}
+                                  type="button"
+                                  onClick={() => { setGlobalCategoryFilter(c); setFilterPickerOpen(false); }}
+                                  className={`px-3.5 py-1.5 text-xs rounded-xl font-bold transition-all duration-200 ${
+                                    globalCategoryFilter === c
+                                      ? "bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-md shadow-teal-500/25 scale-[1.03]"
+                                      : "bg-canvas-alt dark:bg-teal-900/30 text-main dark:text-teal-100 hover:bg-teal-500/15 border border-border dark:border-teal-500/30 hover:border-teal-500/50"
+                                  }`}
+                                >
+                                  {getCategoryLabel(c)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <TrendingUp className="w-4 h-4 text-muted" />
                     {["Recent", "Popular"].map((s) => (
@@ -2166,14 +2334,15 @@ const DiscussionsPage = () => {
                   </div>
                 )}
               </div>
+              <FloatingAssistant />
             </main>
           )}
         </div>
 
       {/* Popup Modal */}
       {popupModal.open && (
-        <div className="fixed inset-0 z-160 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-sm">
+        <div className="fixed inset-0 z-160 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4">
+          <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-xs sm:max-w-sm md:max-w-md">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <h3 className="font-bold text-main text-base">{popupModal.title || "Notice"}</h3>
               <button
