@@ -193,6 +193,13 @@ export const getCourseEnrollments = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Validate the course exists before reporting enrollments, so a bad/unknown
+    // id returns 404 instead of a misleading empty enrollment list.
+    const course = await Course.findByPk(id);
+    if (!course) {
+      return res.status(404).json({ success: false, message: "Course not found" });
+    }
+
     const allUsers = await User.findAll({
       attributes: ["id", "name", "email", "purchasedCourses"],
     });
