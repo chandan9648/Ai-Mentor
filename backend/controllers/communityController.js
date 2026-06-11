@@ -1,4 +1,5 @@
 import { Op } from "sequelize";
+import { sequelize } from "../config/db.js";
 import CommunityPost from "../models/CommunityPost.js";
 import User from "../models/User.js";
 import Report from "../models/Report.js";
@@ -68,15 +69,10 @@ const getCourseDiscussions = async (req, res) => {
       include: [
         { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
-      order: [["createdAt", "DESC"]],
+      order: sort === "popular"
+        ? [[sequelize.literal('jsonb_array_length("likes")'), "DESC"]]
+        : [["createdAt", "DESC"]],
     });
-
-    // Sort in JS to avoid sequelize literal issues
-    if (sort === "popular") {
-      posts.sort(
-        (a, b) => (b.likes?.length || 0) - (a.likes?.length || 0)
-      );
-    }
 
     res.json(posts);
   } catch (error) {
@@ -102,14 +98,10 @@ const getGlobalDiscussions = async (req, res) => {
       include: [
         { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
-      order: [["createdAt", "DESC"]],
+      order: sort === "popular"
+        ? [[sequelize.literal('jsonb_array_length("likes")'), "DESC"]]
+        : [["createdAt", "DESC"]],
     });
-
-    if (sort === "popular") {
-      posts.sort(
-        (a, b) => (b.likes?.length || 0) - (a.likes?.length || 0)
-      );
-    }
 
     res.json(posts);
   } catch (error) {
@@ -387,14 +379,10 @@ const getAllCoursePosts = async (req, res) => {
       include: [
         { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
-      order: [["createdAt", "DESC"]],
+      order: sort === "popular"
+        ? [[sequelize.literal('jsonb_array_length("likes")'), "DESC"]]
+        : [["createdAt", "DESC"]],
     });
-
-    if (sort === "popular") {
-      posts.sort(
-        (a, b) => (b.likes?.length || 0) - (a.likes?.length || 0)
-      );
-    }
 
     res.json(posts);
   } catch (error) {
